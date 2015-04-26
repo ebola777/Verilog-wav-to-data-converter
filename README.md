@@ -2,6 +2,10 @@
 
 Convert .wav to Verilog data file
 
+## Download
+
+Download from [Releases](https://github.com/ebola777/Verilog-wav-to-data-converter/releases).
+
 ## Example
 
 ```
