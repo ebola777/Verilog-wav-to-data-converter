@@ -25,71 +25,61 @@ import java.util.Map;
 public class WaveConverter {
     private static final int BUFFER_SIZE = 1024;
 
-    private final String pathToWav;
-    private final String pathToOutput;
+    private final File wavFile;
+    private final File outputFile;
     private String format;
-    private String bitWidth;
-    private String pathToMap;
+    private int bitWidth;
+    private File mapFile;
 
     private Map<String, Integer> dbMap;
 
-    public WaveConverter(final String pathToWav, final String pathToOutput) {
-        this.pathToWav = pathToWav;
-        this.pathToOutput = pathToOutput;
+    public WaveConverter(final File wavFile, final File outputFile) {
+        this.wavFile = wavFile;
+        this.outputFile = outputFile;
 
         this.dbMap = new HashMap<String, Integer>();
     }
 
-    public void convert() {
+    public void convert() throws Exception {
         final List<Integer> verilogNumbers = new ArrayList<Integer>();
+        final WavFile wavFile = WavFile.openWavFile(this.wavFile);
+        final int numChannels = wavFile.getNumChannels();
+        final double[] buffer = new double[numChannels * BUFFER_SIZE];
+        int framesRead;
+        double minValue = 1;
+        double maxValue = 0;
 
-        this.parseDecibelMap();
+        // Display information about the wav file
+        wavFile.display();
 
-        try {
-            final WavFile wavFile = WavFile.openWavFile(new File(this.pathToWav));
-            final int numChannels = wavFile.getNumChannels();
-            final double[] buffer = new double[numChannels * BUFFER_SIZE];
-            int framesRead;
-            double maxValue = 0;
-            double minValue = 1;
+        do {
+            framesRead = wavFile.readFrames(buffer, BUFFER_SIZE);
 
-            // Display information about the wav file
-            wavFile.display();
+            for (int s = 0; s < framesRead * numChannels; ++s) {
+                int verilogNumber;
+                double dbLevel;
+                final double amplitude = buffer[s];
+                final double amplitudeNormalized = (amplitude + 1) / 2;
 
-            do {
-                framesRead = wavFile.readFrames(buffer, BUFFER_SIZE);
+                dbLevel = this.getDecibelLevel(amplitudeNormalized);
+                verilogNumber = this.getVerilogNumber(dbLevel);
+                verilogNumbers.add(verilogNumber);
 
-                for (int s = 0; s < framesRead * numChannels; ++s) {
-                    int verilogNumber;
-                    double dbLevel;
-                    final double amplitude = buffer[s];
-                    final double amplitudeNormalized = (amplitude + 1) / 2;
+                minValue = Math.min(minValue, amplitudeNormalized);
+                maxValue = Math.max(amplitudeNormalized, maxValue);
+            }
+        } while (framesRead != 0);
 
-                    dbLevel = this.getDecibelLevel(amplitudeNormalized);
-                    verilogNumber = this.getVerilogNumber(dbLevel);
-                    verilogNumbers.add(verilogNumber);
+        System.out.printf("Min decibel: %f%n", this.getDecibelLevel(minValue));
+        System.out.printf("Max decibel: %f%n", this.getDecibelLevel(maxValue));
 
-                    if (amplitudeNormalized > maxValue) {
-                        maxValue = amplitudeNormalized;
-                    } else if (amplitudeNormalized < minValue) {
-                        minValue = amplitudeNormalized;
-                    }
-                }
-            } while (framesRead != 0);
+        wavFile.close();
 
-            System.out.printf("Max decibel: %f%n", this.getDecibelLevel(maxValue));
-            System.out.printf("Min decibel: %f%n", this.getDecibelLevel(minValue));
-
-            wavFile.close();
-
-            this.saveOutput(verilogNumbers);
-        } catch (final Exception e) {
-            System.err.println(e);
-        }
+        this.saveOutput(verilogNumbers);
     }
 
     private void saveOutput(final List<Integer> verilogNumbers) throws Exception {
-        final BufferedWriter writer = new BufferedWriter(new FileWriter(this.pathToOutput));
+        final BufferedWriter writer = new BufferedWriter(new FileWriter(this.outputFile));
 
         for (final int verilogNumber : verilogNumbers) {
             final String verilogNumberText = this.getIntegerToVerilogNumber(verilogNumber);
@@ -102,19 +92,15 @@ public class WaveConverter {
 
         // Output information
         System.out.printf("Verilog number count: %d%n", verilogNumbers.size());
-        System.out.println("Finish.");
+        System.out.println("Finished.");
     }
 
     private void parseDecibelMap() {
-        if (this.getPathToMap().isEmpty()) {
-            return;
-        }
-
         final ObjectMapper mapper = new ObjectMapper();
 
         try {
             final DecibelMap originalDbMap =
-                    mapper.readValue(new File(this.getPathToMap()), DecibelMap.class);
+                    mapper.readValue(this.getMapFile(), DecibelMap.class);
 
             this.dbMap = DecibelMapConverter.getConvertedDecibelMap(originalDbMap);
         } catch (final JsonParseException e) {
@@ -156,14 +142,9 @@ public class WaveConverter {
     }
 
     private String getPaddedNumber(final String num) {
-        if (this.bitWidth == null) {
-            return num;
-        }
-
         final StringBuilder sb = new StringBuilder();
-        final int bitWidthNum = Integer.parseInt(this.bitWidth);
 
-        for (int i = 0; i < bitWidthNum - num.length(); ++i) {
+        for (int i = 0; i < this.getBitWidth() - num.length(); ++i) {
             sb.append("0");
         }
 
@@ -180,23 +161,31 @@ public class WaveConverter {
         return this.format;
     }
 
-    public void setFormat(final String format) {
-        this.format = format;
+    public void setFormat(final String format) throws Exception {
+        if (format.equals("binary") || format.equals("hex")) {
+            this.format = format;
+        } else if (format.isEmpty()) {
+            this.format = "binary";
+        } else {
+            throw new Exception(String.format("Unexpected format %s.", format));
+        }
     }
 
-    public String getBitWidth() {
+    public int getBitWidth() {
         return this.bitWidth;
     }
 
-    public void setBitWidth(final String bitWidth) {
-        this.bitWidth = bitWidth;
+    public void setBitWidth(final String bitWidth) throws NumberFormatException {
+        this.bitWidth = Integer.parseInt(bitWidth);
     }
 
-    public String getPathToMap() {
-        return this.pathToMap;
+    public File getMapFile() {
+        return this.mapFile;
     }
 
-    public void setPathToMap(final String pathToMap) {
-        this.pathToMap = pathToMap;
+    public void setMapFile(final File mapFile) {
+        this.mapFile = mapFile;
+
+        this.parseDecibelMap();
     }
 }
