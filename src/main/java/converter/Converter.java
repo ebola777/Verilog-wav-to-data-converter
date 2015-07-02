@@ -22,7 +22,7 @@ import java.util.Map;
  * Formula of calculating db level: Decibel[f_] := 20*Log[10, f];
  * f ranges from 0 (Min) to 1 (Max).
  */
-public class WaveConverter {
+public class Converter {
     private static final int BUFFER_SIZE = 1024;
 
     private final File wavFile;
@@ -33,7 +33,7 @@ public class WaveConverter {
 
     private Map<String, Integer> dbMap;
 
-    public WaveConverter(final File wavFile, final File outputFile) {
+    public Converter(final File wavFile, final File outputFile) {
         this.wavFile = wavFile;
         this.outputFile = outputFile;
 

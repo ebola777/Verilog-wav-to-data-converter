@@ -1,6 +1,6 @@
 package main;
 
-import converter.WaveConverter;
+import converter.Converter;
 import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
@@ -88,7 +88,7 @@ public class Main {
 
     private static boolean tryConvert(final Namespace res) {
         try {
-            final WaveConverter converter = createConverter(res);
+            final Converter converter = createConverter(res);
 
             converter.convert();
         } catch (final Exception e) {
@@ -99,15 +99,15 @@ public class Main {
         return true;
     }
 
-    private static WaveConverter createConverter(final Namespace res) throws Exception {
+    private static Converter createConverter(final Namespace res) throws Exception {
         final String pathToOutput = res.getString("pathToOutput");
         final String pathToWav = res.getString("pathToWav");
         final String pathToMap = res.getString("pathToMap");
         final String format = res.getString("format");
         final String bitWidth = res.getString("bit_width");
 
-        final WaveConverter waveConverter =
-                new WaveConverter(new File(pathToWav), new File(pathToOutput));
+        final Converter waveConverter =
+                new Converter(new File(pathToWav), new File(pathToOutput));
 
         waveConverter.setMapFile(new File(pathToMap));
         waveConverter.setFormat(format);
